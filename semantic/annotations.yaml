@@ -1,0 +1,497 @@
+﻿# =============================================================================
+# Semantic Layer Annotations - AdventureWorks2019
+# =============================================================================
+# Add business meanings, column descriptions, metric definitions, and synonyms.
+# Run  POST /ingest-schema/semantic  to apply changes to the agent.
+# =============================================================================
+
+metrics:
+  - name: total_revenue
+    description: Total sales revenue (order subtotals before tax/freight)
+    sql: "SELECT SUM(SubTotal) FROM Sales.SalesOrderHeader WHERE Status = 5"
+  - name: total_orders
+    description: Total number of completed sales orders
+    sql: "SELECT COUNT(SalesOrderID) FROM Sales.SalesOrderHeader WHERE Status = 5"
+  - name: average_order_value
+    description: Average value of a completed sales order
+    sql: "SELECT AVG(SubTotal) FROM Sales.SalesOrderHeader WHERE Status = 5"
+  - name: total_customers
+    description: Total number of distinct customers
+    sql: "SELECT COUNT(DISTINCT CustomerID) FROM Sales.Customer"
+  - name: total_products
+    description: Total number of active sellable products
+    sql: "SELECT COUNT(ProductID) FROM Production.Product WHERE SellEndDate IS NULL"
+
+synonyms:
+  - terms: [orders, sales orders, purchases, invoices, transactions]
+    maps_to: SalesOrderHeader
+  - terms: [order lines, order items, line items, order details]
+    maps_to: SalesOrderDetail
+  - terms: [customers, clients, buyers, accounts]
+    maps_to: Customer
+  - terms: [products, items, SKUs, catalog, merchandise]
+    maps_to: Product
+  - terms: [employees, staff, workers, headcount]
+    maps_to: Employee
+  - terms: [vendors, suppliers, partners]
+    maps_to: Vendor
+  - terms: [people, persons, contacts, individuals]
+    maps_to: Person
+  - terms: [salespeople, sales reps, account managers]
+    maps_to: SalesPerson
+  - terms: [regions, territories, sales regions, districts]
+    maps_to: SalesTerritory
+  - terms: [categories, product categories, product groups]
+    maps_to: ProductCategory
+
+tables:
+
+  SalesOrderHeader:
+    business_name: Customer Sales Orders
+    description: >
+      Master record for every customer order. One row per order.
+      Use for revenue totals, order counts, date-range analysis, and order
+      status filtering. Join to SalesOrderDetail for line-item breakdown.
+      Status codes: 1=In process, 2=Approved, 3=Backordered,
+      4=Rejected, 5=Shipped (completed), 6=Cancelled.
+    columns:
+      SalesOrderID:
+        description: Unique order identifier (primary key)
+      OrderDate:
+        description: Date the order was placed. Use for date filtering and time series.
+      DueDate:
+        description: Expected delivery date
+      ShipDate:
+        description: Actual shipment date
+      Status:
+        description: "Order status: 1=In process, 5=Shipped, 6=Cancelled"
+      SubTotal:
+        description: Order amount before tax and freight (USD)
+      TaxAmt:
+        description: Tax amount (USD)
+      Freight:
+        description: Shipping cost (USD)
+      TotalDue:
+        description: "TotalDue = SubTotal + TaxAmt + Freight (USD)"
+      CustomerID:
+        description: FK to Sales.Customer - the buyer
+      SalesPersonID:
+        description: FK to Sales.SalesPerson - the rep who closed the deal (NULL for online orders)
+      TerritoryID:
+        description: FK to Sales.SalesTerritory - the sales region
+      OnlineOrderFlag:
+        description: "1 = placed online (no sales rep), 0 = placed by a sales rep"
+      PurchaseOrderNumber:
+        description: Customer purchase order reference number
+
+  SalesOrderDetail:
+    business_name: Sales Order Line Items
+    description: >
+      One row per product per order. Join to SalesOrderHeader for order-level
+      info and to Product for product details. Use for product-level revenue,
+      quantity sold, and discount analysis.
+    columns:
+      SalesOrderID:
+        description: FK to SalesOrderHeader
+      SalesOrderDetailID:
+        description: Primary key for this line item
+      ProductID:
+        description: FK to Production.Product
+      OrderQty:
+        description: Quantity ordered
+      UnitPrice:
+        description: Selling price per unit at time of sale (USD)
+      UnitPriceDiscount:
+        description: "Discount multiplier applied (0.0 = no discount, 0.1 = 10% off)"
+      LineTotal:
+        description: "LineTotal = OrderQty * UnitPrice * (1 - UnitPriceDiscount) (USD)"
+      SpecialOfferID:
+        description: FK to Sales.SpecialOffer - promotion applied to this line
+
+  Customer:
+    business_name: Customers
+    description: >
+      Each row is one customer account. A customer is either an individual
+      (PersonID is set) or a store (StoreID is set).
+      Join to Person.Person for name/email, to Sales.Store for business name.
+    columns:
+      CustomerID:
+        description: Unique customer identifier (primary key)
+      PersonID:
+        description: FK to Person.Person - individual customer (NULL for store accounts)
+      StoreID:
+        description: FK to Sales.Store - business customer (NULL for individual buyers)
+      TerritoryID:
+        description: FK to Sales.SalesTerritory - customer assigned region
+      AccountNumber:
+        description: Customer account number used in invoices
+
+  SalesPerson:
+    business_name: Sales Representatives
+    description: >
+      One row per sales rep. Tracks quota, bonus, and commission rate.
+      Join to Person.Person (via BusinessEntityID) for name and contact details.
+    columns:
+      BusinessEntityID:
+        description: FK to Person.Person - the rep personal record
+      TerritoryID:
+        description: FK to Sales.SalesTerritory - assigned region (NULL = no territory)
+      SalesQuota:
+        description: Annual sales quota in USD (NULL = no quota)
+      Bonus:
+        description: Most recent bonus paid (USD)
+      CommissionPct:
+        description: "Commission rate as a decimal (e.g. 0.012 = 1.2%)"
+      SalesYTD:
+        description: Year-to-date sales total (USD)
+      SalesLastYear:
+        description: Prior year sales total (USD)
+
+  SalesTerritory:
+    business_name: Sales Territories and Regions
+    description: Geographic sales regions grouped by country and continent.
+    columns:
+      TerritoryID:
+        description: Unique territory identifier (primary key)
+      Name:
+        description: "Territory name (e.g. Northwest, Canada, France)"
+      CountryRegionCode:
+        description: "ISO country code (e.g. US, CA, FR)"
+      Group:
+        description: "Sales group / continent (North America, Europe, Pacific)"
+      SalesYTD:
+        description: Year-to-date sales for this territory (USD)
+      SalesLastYear:
+        description: Prior year sales for this territory (USD)
+
+  Store:
+    business_name: Business Customers and Stores
+    description: >
+      Companies that purchase as business accounts.
+      SalesPersonID points to the rep assigned to the account.
+    columns:
+      BusinessEntityID:
+        description: Primary key - also FK to Person.BusinessEntity
+      Name:
+        description: Store business name
+      SalesPersonID:
+        description: FK to Sales.SalesPerson - assigned account rep
+
+  SpecialOffer:
+    business_name: Promotions and Discounts
+    description: >
+      Promotions that apply a discount to specific products during a date range.
+      Join to SpecialOfferProduct to see which products are on promotion.
+    columns:
+      SpecialOfferID:
+        description: Primary key
+      Description:
+        description: Promotion name/description
+      DiscountPct:
+        description: "Discount percentage (e.g. 0.10 = 10% off)"
+      Type:
+        description: "Promotion type (e.g. Seasonal Discount, Volume Discount)"
+      StartDate:
+        description: Promotion start date
+      EndDate:
+        description: Promotion end date
+      MinQty:
+        description: Minimum order quantity to qualify
+      MaxQty:
+        description: Maximum order quantity that qualifies (NULL = unlimited)
+
+  Product:
+    business_name: Products
+    description: >
+      The product catalog. One row per product/SKU.
+      Join to ProductSubcategory then ProductCategory for category hierarchy.
+      SellEndDate NULL means the product is still actively sold.
+    columns:
+      ProductID:
+        description: Unique product identifier (primary key)
+      Name:
+        description: Product name
+      ProductNumber:
+        description: Product SKU / part number
+      Color:
+        description: Product color (NULL = no color variant)
+      StandardCost:
+        description: Manufacturing cost per unit (USD)
+      ListPrice:
+        description: Retail list price per unit (USD). 0 = not sold individually.
+      Size:
+        description: "Product size (e.g. S, M, L, XL, 58 for bikes)"
+      Weight:
+        description: Product weight in the unit specified by WeightUnitMeasureCode
+      ProductSubcategoryID:
+        description: FK to Production.ProductSubcategory (NULL = misc/component)
+      SellStartDate:
+        description: Date product became available for sale
+      SellEndDate:
+        description: Date product was discontinued (NULL = still active)
+
+  ProductCategory:
+    business_name: Product Categories
+    description: "Top-level product groupings: Bikes, Components, Clothing, Accessories."
+    columns:
+      ProductCategoryID:
+        description: Primary key
+      Name:
+        description: "Category name (Bikes, Components, Clothing, Accessories)"
+
+  ProductSubcategory:
+    business_name: Product Subcategories
+    description: >
+      Second-level product groupings under each category.
+      Example: Bikes includes Mountain Bikes, Road Bikes, and Touring Bikes.
+    columns:
+      ProductSubcategoryID:
+        description: Primary key
+      ProductCategoryID:
+        description: FK to Production.ProductCategory
+      Name:
+        description: "Subcategory name (e.g. Mountain Bikes, Road Frames)"
+
+  WorkOrder:
+    business_name: Production Work Orders
+    description: >
+      Manufacturing work orders to produce a quantity of a product.
+      Use for production volume, scrap analysis, and manufacturing date queries.
+    columns:
+      WorkOrderID:
+        description: Primary key
+      ProductID:
+        description: FK to Production.Product - what is being manufactured
+      OrderQty:
+        description: Quantity ordered to manufacture
+      StockedQty:
+        description: Quantity successfully completed and stocked
+      ScrappedQty:
+        description: Quantity scrapped / wasted
+      StartDate:
+        description: Planned production start date
+      EndDate:
+        description: Planned production end date
+      ScrapReasonID:
+        description: FK to Production.ScrapReason (NULL = no scrap)
+
+  TransactionHistory:
+    business_name: Inventory Transaction History
+    description: >
+      Every inventory movement - purchases, sales, and work orders.
+      TransactionType W=Work Order, S=Sales Order, P=Purchase Order.
+    columns:
+      TransactionID:
+        description: Primary key
+      ProductID:
+        description: FK to Production.Product
+      TransactionType:
+        description: "W=Work Order, S=Sales Order, P=Purchase Order"
+      TransactionDate:
+        description: Date of the transaction
+      Quantity:
+        description: "Units moved (positive = in, negative = out)"
+      ActualCost:
+        description: Cost per unit at time of transaction (USD)
+
+  Person:
+    business_name: People and Contacts
+    description: >
+      All individuals in the system - customers, employees, vendors, etc.
+      PersonType: EM=Employee, SP=Sales Person, IN=Individual customer,
+      SC=Store contact, VC=Vendor contact, GC=General contact.
+    columns:
+      BusinessEntityID:
+        description: Primary key - shared with Employee, SalesPerson, Vendor
+      PersonType:
+        description: "EM=Employee, SP=Sales Person, IN=Individual customer, SC=Store contact, VC=Vendor contact"
+      FirstName:
+        description: First name
+      MiddleName:
+        description: Middle name or initial
+      LastName:
+        description: Last name
+
+  Address:
+    business_name: Addresses
+    description: Physical addresses for people, employees, stores, and vendors.
+    columns:
+      AddressID:
+        description: Primary key
+      AddressLine1:
+        description: Street address line 1
+      City:
+        description: City name
+      StateProvinceID:
+        description: FK to Person.StateProvince
+      PostalCode:
+        description: ZIP / postal code
+
+  EmailAddress:
+    business_name: Email Addresses
+    description: Email addresses for people. One person can have multiple emails.
+    columns:
+      BusinessEntityID:
+        description: FK to Person.Person
+      EmailAddress:
+        description: Email address string
+
+  StateProvince:
+    business_name: States and Provinces
+    description: Reference table of states, provinces, and territories.
+    columns:
+      StateProvinceCode:
+        description: "2-letter code (e.g. WA, CA, ON)"
+      CountryRegionCode:
+        description: "ISO country code (e.g. US, CA)"
+      Name:
+        description: Full state/province name
+
+  Employee:
+    business_name: Employees
+    description: >
+      One row per employee. Join to Person.Person (via BusinessEntityID)
+      for name, email, and phone.
+    columns:
+      BusinessEntityID:
+        description: Primary key - FK to Person.Person
+      JobTitle:
+        description: Employee job title
+      BirthDate:
+        description: Date of birth
+      MaritalStatus:
+        description: "M=Married, S=Single"
+      Gender:
+        description: "M=Male, F=Female"
+      HireDate:
+        description: Date the employee was hired
+      SalariedFlag:
+        description: "1=Salaried, 0=Hourly"
+      VacationHours:
+        description: Remaining vacation hours
+      SickLeaveHours:
+        description: Remaining sick leave hours
+
+  Department:
+    business_name: Departments
+    description: "Company departments such as Engineering, Sales, Marketing, and Finance."
+    columns:
+      DepartmentID:
+        description: Primary key
+      Name:
+        description: Department name
+      GroupName:
+        description: "Department group (e.g. Research and Development, Sales and Marketing)"
+
+  EmployeeDepartmentHistory:
+    business_name: Employee Department History
+    description: >
+      Tracks which department each employee belongs to over time.
+      A NULL EndDate means the employee is CURRENTLY in that department.
+    columns:
+      BusinessEntityID:
+        description: FK to HumanResources.Employee
+      DepartmentID:
+        description: FK to HumanResources.Department
+      StartDate:
+        description: Date the employee joined this department
+      EndDate:
+        description: Date the employee left this department (NULL = current assignment)
+
+  EmployeePayHistory:
+    business_name: Employee Pay History
+    description: >
+      Tracks salary and pay rate changes over time for each employee.
+      Use the most recent RateChangeDate row for current pay.
+    columns:
+      BusinessEntityID:
+        description: FK to HumanResources.Employee
+      RateChangeDate:
+        description: Date this pay rate took effect
+      Rate:
+        description: Pay rate in USD (per hour for hourly employees, annual for salaried)
+      PayFrequency:
+        description: "1=Monthly, 2=Bi-weekly"
+
+  Vendor:
+    business_name: Vendors and Suppliers
+    description: >
+      Companies that supply raw materials and components.
+      Join to Person.BusinessEntity for contact details.
+    columns:
+      BusinessEntityID:
+        description: Primary key - FK to Person.BusinessEntity
+      AccountNumber:
+        description: Vendor account number
+      Name:
+        description: Vendor company name
+      CreditRating:
+        description: "1=Superior, 2=Excellent, 3=Above Average, 4=Average, 5=Below Average"
+      ActiveFlag:
+        description: "1=Active vendor, 0=No longer used"
+      PreferredVendorStatus:
+        description: "1=This is the preferred vendor for their products"
+
+  PurchaseOrderHeader:
+    business_name: Purchase Orders
+    description: >
+      One row per purchase order sent to a vendor.
+      Use for spend analysis, vendor performance, and procurement date queries.
+      Status: 1=Pending, 2=Approved, 3=Rejected, 4=Complete.
+    columns:
+      PurchaseOrderID:
+        description: Primary key
+      Status:
+        description: "1=Pending, 2=Approved, 3=Rejected, 4=Complete"
+      EmployeeID:
+        description: FK to HumanResources.Employee - buyer who placed the order
+      VendorID:
+        description: FK to Purchasing.Vendor
+      OrderDate:
+        description: Date order was placed
+      ShipDate:
+        description: Expected delivery date
+      SubTotal:
+        description: Order subtotal before tax and freight (USD)
+      TotalDue:
+        description: "TotalDue = SubTotal + TaxAmt + Freight (USD)"
+
+  PurchaseOrderDetail:
+    business_name: Purchase Order Line Items
+    description: One row per product per purchase order.
+    columns:
+      PurchaseOrderID:
+        description: FK to Purchasing.PurchaseOrderHeader
+      ProductID:
+        description: FK to Production.Product - what was ordered
+      OrderQty:
+        description: Quantity ordered
+      UnitPrice:
+        description: Purchase price per unit (USD)
+      LineTotal:
+        description: "LineTotal = OrderQty * UnitPrice (USD)"
+      ReceivedQty:
+        description: Quantity actually received from vendor
+      RejectedQty:
+        description: Quantity rejected (failed quality control)
+      StockedQty:
+        description: Quantity accepted and put into stock
+
+  ProductVendor:
+    business_name: Product-Vendor Relationships
+    description: Maps which vendors supply which products with lead times and pricing.
+    columns:
+      ProductID:
+        description: FK to Production.Product
+      BusinessEntityID:
+        description: FK to Purchasing.Vendor
+      AverageLeadTime:
+        description: Average days from order to delivery
+      StandardPrice:
+        description: Vendor standard price per unit (USD)
+      LastReceiptCost:
+        description: Most recent actual purchase price (USD)
+      MinOrderQty:
+        description: Minimum order quantity required by vendor
+      MaxOrderQty:
+        description: Maximum order quantity accepted by vendor
