@@ -13,7 +13,7 @@ Edit `.env`:
 
 ```env
 GITHUB_TOKEN=ghp_your_token_here
-MSSQL_CONN_STR=DRIVER={ODBC Driver 17 for SQL Server};SERVER=JONATHANS-PC\SQLEXPRESS;DATABASE=AdventureWorks2019;Trusted_Connection=yes
+MSSQL_CONN_STR=DRIVER={ODBC Driver 17 for SQL Server};SERVER={YOUR_SERVER_NAME}\SQLEXPRESS;DATABASE=AdventureWorks2019;Trusted_Connection=yes
 ```
 
 ## Run
