@@ -1,7 +1,7 @@
 ﻿"""
 test_ddl.py
 
-Connects to AdventureWorks2019 on JONATHANS-PC\\SQLEXPRESS and prints
+Connects to AdventureWorks2019 on {YOUR_SERVER_NAME}\\SQLEXPRESS and prints
 the reconstructed DDL for every user table in the database:
   - CREATE TABLE statement (columns + types + nullability + defaults)
   - PRIMARY KEY constraints
@@ -25,7 +25,7 @@ import pyodbc
 
 CONN_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=JONATHANS-PC\\SQLEXPRESS;"
+    "SERVER={YOUR_SERVER_NAME}\\SQLEXPRESS;"
     "DATABASE=AdventureWorks2019;"
     "Trusted_Connection=yes"
 )
